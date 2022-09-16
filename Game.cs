@@ -3,6 +3,7 @@
  */
 using System;
 using System.Collections.Generic;
+using System.Windows.Forms;
 
 namespace Ksu.Cis300.Klondike
 {
@@ -15,12 +16,12 @@ namespace Ksu.Cis300.Klondike
         /// <summary>
         /// keep track of discard pile being selected
         /// </summary>
-        private DiscardPile _currentDPile;
+        private DiscardPile _currentDPile = new DiscardPile();
         
         /// <summary>
         /// keep track of tableau column being selected 
         /// </summary>
-        private TableauColumn _currentTableauColumn;
+        private TableauColumn _currentTableauColumn = new TableauColumn();
 
         /// <summary>
         /// int to keep track of number of face down tableau cards 
@@ -48,10 +49,6 @@ namespace Ksu.Cis300.Klondike
            for ( int i = 0; i < numCards; i++)
             {
                 tempStack.Push(firstStack.Pop());
-
-            }
-           for (int i = 0; i < numCards; i++)
-            {
                 secondStack.Push(tempStack.Pop());
             }        
                     
@@ -66,6 +63,12 @@ namespace Ksu.Cis300.Klondike
                 _currentDPile.IsSelected = false;
                 _currentDPile = null;
             }
+            if (_currentTableauColumn != null)
+            {
+                _currentTableauColumn.NumberSelected = 0;
+                _currentTableauColumn = null;
+                
+            }
 
         }
 
@@ -78,14 +81,16 @@ namespace Ksu.Cis300.Klondike
         /// <returns>bool if move is legal</returns>
         private bool LegalTableau(Card cardMoved, Stack<Card> newStack )
         {
+            if(cardMoved.Rank == 13 && newStack.Count == 0) // King to empty space 
+            {
+                return true;
+            }
+            
             if ((cardMoved.Rank == newStack.Peek().Rank - 1) && (cardMoved.IsRed != newStack.Peek().IsRed))
             {
                 return true;
             }
-            if(cardMoved.Rank == 13 && newStack.Count == 0)
-            {
-                return true;
-            }
+            
             else
             {
                 return false;
@@ -99,17 +104,25 @@ namespace Ksu.Cis300.Klondike
         /// <returns>a bool telling if move is legal</returns>
         private bool LegalFoundation(Card cardMoved, Stack<Card> newStack)
         {
-            if((cardMoved.Rank -1 == newStack.Peek().Rank) && (cardMoved.Suit == newStack.Peek().Suit))
+            
+            if (cardMoved.Rank == 1 && newStack.Count == 0) // if it is an ace 
             {
                 return true;
             }
-            if (cardMoved.Rank == 1 && newStack.Count == 0)
-            {
-                return true;
-            }
-            else
+            else if (cardMoved.Rank!= 1 && newStack.Count == 0)
             {
                 return false;
+            }
+                
+            if((cardMoved.Rank -1 == newStack.Peek().Rank) && (cardMoved.Suit == newStack.Peek().Suit)) // if it is one more and same suit 
+            {
+                return true;
+            }
+            
+            
+            else
+            {
+                return false; // not a legal move 
             }
         }
         /// <summary>
@@ -120,6 +133,7 @@ namespace Ksu.Cis300.Klondike
         {
             if (faceDown == 0 && stockCards == 1)
             {
+                MessageBox.Show("You Won!!!"); //YAY YOU WON
                 return true;
             }
             else
@@ -151,12 +165,14 @@ namespace Ksu.Cis300.Klondike
             for (int i = 0; i < gameColumns.Length; ++i)
             {
                 TransferCards(cardDeck, gameColumns[i].FaceUpPile, 1);
-                for (int j = 0; j <= (6 - i); ++j)
+                for (int j = 1; j <= (6 - i); ++j)
             
                 
             
                 TransferCards(cardDeck, gameColumns[i + j].FaceDownPile, 1);
             }
+            _currentDPile = null;
+            _currentTableauColumn = null;
         }
         /// <summary>
         /// Moves from the discard to the tableau
@@ -168,35 +184,35 @@ namespace Ksu.Cis300.Klondike
             {
                 TransferCards(_currentDPile.Pile, cardMoved, 1);
             }
+            RemoveSelection();
         }
-        private void MoveToFoundation(Stack<Card> foundationPile)
+        private void MoveDiscardToFoundation(Stack<Card> foundationPile)
         {
-            if (LegalFoundation(_currentTableauColumn.FaceDownPile.Peek(), foundationPile) == true)
+            if (LegalFoundation(_currentDPile.Pile.Peek(), foundationPile) == true)
             {
-                TransferCards(_currentTableauColumn.FaceUpPile, foundationPile, 1);
+                TransferCards(_currentDPile.Pile, foundationPile, 1);
             }
+            RemoveSelection();
         }
         /// <summary>
         /// Method to move card(s) from a tableau to a tableau
         /// </summary>
         /// <param name="otherTableau">The tableau you are attempting to move to </param>
-        private void MoveToTableau(Stack<Card> otherTableau)
+        private void MoveTableauToTableau(Stack<Card> otherTableau)
         {
             Stack<Card> tempStack = new Stack<Card>();
-            for (int i = 0; i < otherTableau.Count; ++i)
-            {
-                tempStack.Push(_currentTableauColumn.FaceUpPile.Pop());
-            }
+            TransferCards(_currentTableauColumn.FaceUpPile, tempStack, _currentTableauColumn.FaceUpPile.Count);
             if (LegalTableau(tempStack.Peek(), otherTableau))
             {
                 TransferCards(tempStack, otherTableau, tempStack.Count);
-                
+                if (_currentTableauColumn.FaceUpPile.Count == 0)
+                {
+                    FlipColumnCard(_currentTableauColumn);
+
+                }
+
             }
-            if(_currentTableauColumn.FaceUpPile.Count == 0)
-            {
-                FlipColumnCard(_currentTableauColumn);
-                    
-            }
+           
             else
             {
                 for(int i =0; i< tempStack.Count; ++i)
@@ -204,6 +220,9 @@ namespace Ksu.Cis300.Klondike
                     _currentTableauColumn.FaceUpPile.Push(tempStack.Pop());
                 }
             }
+            
+            RemoveSelection();
+
         }
         /// <summary>
         /// Method to move cards from the tableau to the foundation 
@@ -211,16 +230,22 @@ namespace Ksu.Cis300.Klondike
         /// <param name="foundationPile">the foundation pile you are attempting to move to</param>
         private void MoveTableauToFoundation(Stack<Card> foundationPile)
         {
-            if((_currentTableauColumn.FaceUpPile.Peek().Rank == foundationPile.Peek().Rank + 1) && (_currentTableauColumn.FaceUpPile.Peek().Suit == foundationPile.Peek().Suit))
+            if(LegalFoundation(_currentTableauColumn.FaceUpPile.Peek(), foundationPile))
             {
                     TransferCards(_currentTableauColumn.FaceUpPile, foundationPile, 1);
-            }
-            if((_currentTableauColumn.FaceUpPile.Peek().Rank == 1) && (foundationPile.Count == 0))
-            {
-                TransferCards(_currentTableauColumn.FaceUpPile, foundationPile, 1);
-            }
-        }
+                if (_currentTableauColumn.FaceUpPile.Count == 0)
+                {
+                    FlipColumnCard(_currentTableauColumn);
 
+                }
+            }
+            RemoveSelection();
+           
+        }
+        
+       
+      
+        
         /// <summary>
         /// The random number generator.
         /// </summary>
@@ -285,7 +310,18 @@ namespace Ksu.Cis300.Klondike
         /// <param name="discard">The discard pile.</param>
         public void DrawCardsFromStock(CardPile stock, DiscardPile discard)
         {
-
+            if (stock.Pile.Count == 0) // if the stock is empty 
+            {
+                TransferCards(discard.Pile, stock.Pile, discard.Pile.Count);
+            }
+            else if (stock.Pile.Count >= 3)
+            {
+                TransferCards(stock.Pile, discard.Pile, 3);
+            }
+            else
+            {
+                TransferCards(stock.Pile, discard.Pile, stock.Pile.Count);
+            }
         }
 
         /// <summary>
@@ -294,7 +330,20 @@ namespace Ksu.Cis300.Klondike
         /// <param name="discard">The discard pile.</param>
         public void SelectDiscard(DiscardPile discard)
         {
+            if (_currentDPile != null)
+            {
+                RemoveSelection();
 
+            }
+            if (_currentTableauColumn != null)
+            {
+                RemoveSelection();
+            }
+            else
+            {
+                _currentDPile = discard;
+                _currentDPile.IsSelected = true;
+            }
         }
 
         /// <summary>
@@ -306,8 +355,29 @@ namespace Ksu.Cis300.Klondike
         /// <returns>Whether the play wins the game.</returns>
         public bool SelectTableauCards(TableauColumn col, int n)
         {
-            return false;
+            if (_currentTableauColumn == col)
+            {
+                RemoveSelection();
+            }
+            else if (_currentDPile != null && n <= 1)
+            {
+                MoveDiscard(col.FaceUpPile);
+            }
+            else if (_currentTableauColumn != null && n <= 1)
+            {
+                MoveTableauToTableau(col.FaceUpPile);
+            }
+            else 
+            {
+                _currentTableauColumn = col;
+                _currentTableauColumn.NumberSelected = n;
+
+            }
+            return GameWon();
+            
         }
+
+
 
         /// <summary>
         /// Moves the selected card to the given foundation pile, if possible
@@ -316,7 +386,16 @@ namespace Ksu.Cis300.Klondike
         /// <returns>Whether the move wins the game.</returns>
         public bool MoveSelectionToFoundation(Stack<Card> dest)
         {
-            return false;
+            if(_currentTableauColumn != null)
+            {
+                MoveTableauToFoundation(dest);
+            }
+             else if(_currentDPile != null)
+            {
+                MoveDiscardToFoundation(dest);
+            }
+            RemoveSelection();
+            return GameWon();
         }
     }
 }
